@@ -1,0 +1,124 @@
+\documentclass[11pt,a4paper]
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{bm}
+
+\title{Speaker Notes: An Introduction to Truncated Marginal Neural Ratio Estimation}
+\author{Murali Krishnan}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\noindent These notes are intended to accompany a presentation to students who have not previously encountered simulation-based inference, Markov chains, or neural ratio estimation. They prioritise intuition and vocabulary before formalism.
+
+\section{Bayesian Inference}
+
+\subsection*{Aim of this section}
+Explain inference as learning about unknown model parameters from observed data. Introduce the prior, likelihood, evidence, and posterior without assuming that the audience has seen Bayes' theorem before.
+
+\subsection*{Suggested explanation}
+In many scientific problems, a model contains unknown quantities. For example, a cosmological model may contain parameters describing the matter density of the Universe, or an experimental model may contain an unknown signal strength and detector-noise parameters. We denote all unknown parameters collectively by $\bm{\theta}$ and the measured data by $\bm{x}_0$. The goal is not merely to find one ``best'' parameter value, but to quantify which parameter values remain plausible after seeing the data.
+
+Bayesian inference expresses this update through Bayes' theorem:
+\begin{equation}
+ p(\bm{\theta} \mid \bm{x}_0) = \frac{p(\bm{x}_0 \mid \bm{\theta})p(\bm{\theta})}{p(\bm{x}_0)}.
+\end{equation}
+The posterior $p(\bm{\theta} \mid \bm{x}_0)$ is the final probability distribution for the parameters after observing the data. The prior $p(\bm{\theta})$ represents knowledge or assumptions before looking at the data. The likelihood $p(\bm{x}_0 \mid \bm{\theta})$ says how compatible a proposed parameter value is with the observation. The denominator $p(\bm{x}_0)$ is called the evidence; it normalises the posterior so that its total probability is one.
+
+\subsection*{Analogy}
+Think of diagnosis. Before a test result, some diagnoses may be more plausible than others: this is the prior. A test result is more likely under some diagnoses than under others: this is the likelihood. Combining both gives the posterior probability of each diagnosis.
+
+\subsection*{Key message for the slide}
+Bayesian inference turns a model, prior assumptions, and observed data into a distribution of plausible parameter values.
+
+\section{Introduction to SBI and Markov Chains}
+
+\subsection*{The likelihood problem}
+In textbook examples, one can write the likelihood explicitly. For a Gaussian measurement with known variance, for instance, evaluating $p(\bm{x}_0 \mid \bm{\theta})$ is easy. Many realistic physics models are different: they are available as forward simulators. Given a choice of parameters $\bm{\theta}$, the simulator generates synthetic data $\bm{x}$, possibly by modelling physical evolution, detector effects, selection effects, and random noise.
+
+For complicated simulators, it may be easy to generate one artificial dataset but extremely hard or impossible to calculate the probability density of a particular dataset analytically. This is an \emph{intractable likelihood}. Simulation-based inference (SBI), also called likelihood-free inference, is designed for this setting: instead of evaluating the likelihood, it learns from simulated parameter--data pairs.
+
+\subsection*{Where Markov chains enter}
+A traditional way to explore a posterior is Markov Chain Monte Carlo (MCMC). A Markov chain is a sequence of parameter values $\bm{\theta}_1,\bm{\theta}_2,\ldots$ in which the next state is proposed using the current state rather than chosen independently from scratch. The proposal is accepted or rejected in a way that makes frequently visited regions proportional to the posterior density. After enough steps, a histogram of the chain approximates $p(\bm{\theta} \mid \bm{x}_0)$.
+
+MCMC works very well when the likelihood can be evaluated. However, if each likelihood calculation is unavailable or requires a costly simulation, the chain is difficult to construct. It can also spend many steps exploring regions that are ultimately implausible. SBI replaces repeated likelihood evaluation with a learning problem based on simulations.
+
+\subsection*{Key message for the slide}
+MCMC samples a posterior by repeatedly using a likelihood. SBI is useful when we can simulate data but cannot calculate that likelihood.
+
+\section{Neural Ratio Estimation and reason for difficulty}
+
+\subsection*{From density estimation to classification}
+Neural Ratio Estimation (NRE) does not try to learn the likelihood itself. It learns the ratio
+\begin{equation}
+ r(\bm{x} \mid \bm{\theta}) = \frac{p(\bm{x} \mid \bm{\theta})}{p(\bm{x})} = \frac{p(\bm{\theta} \mid \bm{x})}{p(\bm{\theta})}.
+\end{equation}
+This ratio measures how much observing $\bm{x}$ changes the plausibility of $\bm{\theta}$ relative to its prior plausibility. Once the ratio is known for the observation $\bm{x}_0$, multiplying it by the prior recovers the posterior up to normalisation.
+
+The key machine-learning trick is to train a binary classifier on two kinds of pairs. Positive examples are \emph{joint} samples: first draw $\bm{\theta}$ from the prior, then simulate $\bm{x}$ using that same $\bm{\theta}$. Negative examples are \emph{independent} pairs: take a parameter from one simulation and data from a different, unrelated simulation. A good classifier learns whether the parameter and data belong together. Its optimal decision boundary contains exactly the density ratio above.
+
+\subsection*{Why direct NRE remains difficult}
+The ratio $r(\bm{x} \mid \bm{\theta})$ may depend on every component of a high-dimensional parameter vector. Learning one function over a 20-, 50-, or 100-dimensional space is hard because the available simulations become sparse: there are vastly many ways to change several parameters at once. This is one form of the curse of dimensionality.
+
+A numerical illustration helps. If each of $d$ parameters must be restricted to one tenth of its original prior range to reach the posterior region, then that region occupies roughly $(0.1)^d$ of the original volume. For $d=20$, this is $10^{-20}$. Random simulations from the original prior almost never reach the relevant region. A neural network trained globally must also learn what happens throughout this enormous region, even though only a small neighbourhood matters for the observed data.
+
+\subsection*{Key message for the slide}
+NRE turns likelihood-free inference into binary classification, but learning a full high-dimensional posterior or ratio still wastes simulations.
+
+\section{Marginalisation}
+
+\subsection*{What is a marginal posterior?}
+Often we care about only one or two parameters, while the rest are nuisance parameters. For example, one might want a credible interval for a dark-matter parameter while accounting for uncertain source properties, detector calibration, and noise parameters. The one-parameter marginal posterior for $\theta_1$ is obtained by integrating the full posterior over all other parameters:
+\begin{equation}
+ p(\theta_1 \mid \bm{x}_0) = \int p(\theta_1,\theta_2,\ldots,\theta_d \mid \bm{x}_0)\,d\theta_2\cdots d\theta_d.
+\end{equation}
+Marginalisation does not mean ignoring nuisance parameters. They are still varied and their uncertainty is included; they are simply integrated out of the final answer.
+
+\subsection*{Marginal NRE}
+Marginal Neural Ratio Estimation (MNRE) trains a ratio estimator for a selected low-dimensional subset, such as $\theta_1$ or $(\theta_1,\theta_2)$, rather than for the whole vector. Simulations still vary every parameter, so nuisance effects remain present in the data. But the classifier is asked only whether the selected parameter subset is compatible with the simulated data. In effect, the unused parameters are automatically averaged over according to their prior distribution.
+
+This is useful because physicists commonly report one- and two-dimensional posterior plots. MNRE trains directly for those quantities instead of first solving the much harder problem of representing the entire joint posterior.
+
+\subsection*{Key message for the slide}
+Marginalisation retains uncertainty from nuisance parameters while focusing inference on the few parameters we actually want to report.
+
+\section{Truncation}
+
+\subsection*{The central idea}
+Even with marginal ratio estimation, early simulations drawn from a broad prior can be wasteful. TMNRE therefore performs inference in rounds. After an initial set of simulations and a first marginal-ratio estimate, it identifies parameter values that are very unlikely for the observed data. These values are removed from the sampling region for the next round.
+
+Let $\Gamma$ denote the retained region. The truncated prior can be written as
+\begin{equation}
+ p_{\Gamma}(\bm{\theta}) = \frac{p(\bm{\theta})\,\mathbb{I}_{\Gamma}(\bm{\theta})}{\int_{\Gamma}p(\bm{\theta})\,d\bm{\theta}},
+\end{equation}
+where $\mathbb{I}_{\Gamma}$ equals one inside $\Gamma$ and zero outside it. Thus, truncation does not reshape the prior within the retained region: it keeps the same relative prior probabilities there and assigns zero probability outside.
+
+For a single parameter with a unimodal posterior, the removed portions are usually the far-left and far-right outer regions where the estimated posterior density is negligible. These are the ``tails'' of the distribution. In several dimensions, the retained region is often built from bounds on the marginal posteriors. The next simulations are drawn only from this smaller region, so a much larger fraction of the simulation budget is spent near parameter values that can plausibly explain $\bm{x}_0$.
+
+\subsection*{Important caution}
+Truncation must be conservative. If the retained region accidentally excludes a genuine posterior mode, no later round can recover it. TMNRE therefore uses low thresholds and checks whether the retained region has stopped shrinking; diagnostics and calibration tests are essential.
+
+\subsection*{Key message for the slide}
+Truncation repeatedly removes clearly implausible parameter regions, concentrating later simulations where the posterior is expected to be.
+
+\section{Applications}
+
+\subsection*{Why it is useful in physics}
+TMNRE is especially relevant when a forward simulation is realistic but expensive, the likelihood is unavailable, and only a few marginal constraints are required from a model with many nuisance parameters. It has been applied primarily in astrophysics and cosmology.
+
+\subsection*{Examples to mention}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{CMB power spectra:} infer cosmological parameters from simulated microwave-background observations while accounting for instrumental and astrophysical nuisance effects.
+  \item \textbf{Strong gravitational lensing:} constrain dark-matter properties from simulated images of lensed galaxies.
+  \item \textbf{Stochastic gravitational-wave backgrounds:} infer properties of a weak gravitational-wave signal using waveform and detector simulations.
+  \item \textbf{21-cm cosmology:} constrain the early Universe using simulations of the sky-averaged radio signal.
+  \item \textbf{Type Ia supernovae:} infer dust-extinction and population parameters from simulated light curves.
+\end{itemize}
+
+\subsection*{Closing explanation}
+Across these examples, the pattern is the same: the scientific model is easy to run forward but hard to invert analytically. TMNRE uses simulations to learn the relevant posterior marginals, reduces the number of wasted simulations through truncation, and provides diagnostics that can be tested on simulated mock observations. It does not eliminate the need for careful modelling or validation, but it offers a practical route to Bayesian inference when conventional likelihood-based methods are infeasible.
+
+\end{document}
