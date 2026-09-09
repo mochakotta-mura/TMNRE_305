@@ -24,7 +24,7 @@ In many scientific problems, a model contains unknown quantities. For example, a
 
 Bayesian inference expresses this update through Bayes' theorem:
 \begin{equation}
- p(\bm{\theta} \mid \bm{x}_0) = \frac{p(\bm{x}_0 \mid \bm{\theta})p(\bm{\theta})}{p(\bm{x}_0)}.
+p(\bm{\theta} \mid \bm{x}_0) = \frac{p(\bm{x}_0 \mid \bm{\theta})p(\bm{\theta})}{p(\bm{x}_0)}.
 \end{equation}
 The posterior $p(\bm{\theta} \mid \bm{x}_0)$ is the final probability distribution for the parameters after observing the data. The prior $p(\bm{\theta})$ represents knowledge or assumptions before looking at the data. The likelihood $p(\bm{x}_0 \mid \bm{\theta})$ says how compatible a proposed parameter value is with the observation. The denominator $p(\bm{x}_0)$ is called the evidence; it normalises the posterior so that its total probability is one.
 
@@ -49,12 +49,12 @@ MCMC works very well when the likelihood can be evaluated. However, if each like
 \subsection*{Key message for the slide}
 MCMC samples a posterior by repeatedly using a likelihood. SBI is useful when we can simulate data but cannot calculate that likelihood.
 
-\section{Neural Ratio Estimation and reason for difficulty}
+\section{Neural Ratio Estimation and Reason for Difficulty}
 
 \subsection*{From density estimation to classification}
 Neural Ratio Estimation (NRE) does not try to learn the likelihood itself. It learns the ratio
 \begin{equation}
- r(\bm{x} \mid \bm{\theta}) = \frac{p(\bm{x} \mid \bm{\theta})}{p(\bm{x})} = \frac{p(\bm{\theta} \mid \bm{x})}{p(\bm{\theta})}.
+r(\bm{x} \mid \bm{\theta}) = \frac{p(\bm{x} \mid \bm{\theta})}{p(\bm{x})} = \frac{p(\bm{\theta} \mid \bm{x})}{p(\bm{\theta})}.
 \end{equation}
 This ratio measures how much observing $\bm{x}$ changes the plausibility of $\bm{\theta}$ relative to its prior plausibility. Once the ratio is known for the observation $\bm{x}_0$, multiplying it by the prior recovers the posterior up to normalisation.
 
@@ -73,7 +73,7 @@ NRE turns likelihood-free inference into binary classification, but learning a f
 \subsection*{What is a marginal posterior?}
 Often we care about only one or two parameters, while the rest are nuisance parameters. For example, one might want a credible interval for a dark-matter parameter while accounting for uncertain source properties, detector calibration, and noise parameters. The one-parameter marginal posterior for $\theta_1$ is obtained by integrating the full posterior over all other parameters:
 \begin{equation}
- p(\theta_1 \mid \bm{x}_0) = \int p(\theta_1,\theta_2,\ldots,\theta_d \mid \bm{x}_0)\,d\theta_2\cdots d\theta_d.
+p(\theta_1 \mid \bm{x}_0) = \int p(\theta_1,\theta_2,\ldots,\theta_d \mid \bm{x}_0)\,d\theta_2\cdots d\theta_d.
 \end{equation}
 Marginalisation does not mean ignoring nuisance parameters. They are still varied and their uncertainty is included; they are simply integrated out of the final answer.
 
@@ -92,7 +92,7 @@ Even with marginal ratio estimation, early simulations drawn from a broad prior 
 
 Let $\Gamma$ denote the retained region. The truncated prior can be written as
 \begin{equation}
- p_{\Gamma}(\bm{\theta}) = \frac{p(\bm{\theta})\,\mathbb{I}_{\Gamma}(\bm{\theta})}{\int_{\Gamma}p(\bm{\theta})\,d\bm{\theta}},
+p_{\Gamma}(\bm{\theta}) = \frac{p(\bm{\theta})\,\mathbb{I}_{\Gamma}(\bm{\theta})}{\displaystyle\int_{\Gamma}p(\bm{\theta})\,d\bm{\theta}},
 \end{equation}
 where $\mathbb{I}_{\Gamma}$ equals one inside $\Gamma$ and zero outside it. Thus, truncation does not reshape the prior within the retained region: it keeps the same relative prior probabilities there and assigns zero probability outside.
 
