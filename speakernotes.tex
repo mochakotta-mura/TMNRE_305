@@ -1,4 +1,4 @@
-\documentclass[13pt,a4paper]{article}
+﻿\documentclass[13pt,a4paper]{article}
 
 \usepackage[
   top=0.6in,
@@ -9,6 +9,7 @@
 \usepackage{amsmath,amssymb}
 \usepackage{bm}
 \usepackage{fancyhdr}
+\usepackage{enumitem}
 
 \pagestyle{fancy}
 \fancyhf{}
@@ -17,6 +18,19 @@
 \renewcommand{\footrulewidth}{0pt}
 
 \begin{document}
+
+\begin{center}{\large\bfseries TMNRE}\end{center}
+
+\section*{Presentation route}
+\begin{itemize}
+\item Start with the Bayesian question: which parameter values remain plausible after observing data?
+\item Explain the simulator, then contrast likelihood-based MCMC with simulation-based inference.
+\item Explain the ratio classifier: joint parameter--data pairs versus independently shuffled pairs.
+\item Introduce marginalisation: retain parameters needed for the scientific question and average over nuisance parameters.
+\item Introduce truncation: use estimated marginals to remove only low-posterior regions and simulate again.
+\item End with validation: check that plausible modes were not removed and test coverage on new simulations.
+\end{itemize}
+
 
 Bayesian inference concerns learning about unknown quantities from observed data. Bayes' theorem expresses how information from the data updates an initial probability distribution:
 \begin{equation}
@@ -240,4 +254,23 @@ The truncation must be conservative. If a genuine posterior region or mode is ex
 
 TMNRE combines marginal ratio estimation with this iterative restriction of the simulation domain. Marginalisation avoids directly representing an unnecessarily high-dimensional joint posterior, while truncation reduces the number of simulations spent in regions that are unlikely under the observation. The result is a simulation-based inference procedure focused on the marginal posterior quantities required for the analysis.
 
+\section*{TMNRE in accessible examples}
+\subsection*{Finding a planet from a star's brightness}
+\begin{itemize}
+\item \textbf{Dataset:} brightness measurements over time, with transit dips, stellar variation, and instrument noise.
+\item \textbf{Marginalisation:} report planet radius and orbital period while averaging over baseline brightness, timing offsets, stellar variability, and noise.
+\item \textbf{Truncation:} retain radii and periods whose simulated dips resemble the observed dips; remove values only when posterior mass is negligible.
+\end{itemize}
+\subsection*{Recognising a noisy voice command}
+\begin{itemize}
+\item \textbf{Dataset:} a waveform or spectrogram showing sound strength across time and frequency.
+\item \textbf{Marginalisation:} report the command while averaging over speaker pitch, speed, microphone position, and noise type.
+\item \textbf{Truncation:} focus new simulations on commands and conditions whose simulated spectrograms resemble the observation.
+\end{itemize}
+\subsection*{Diagnosing a washing-machine fault}
+\begin{itemize}
+\item \textbf{Dataset:} an audio or vibration recording, possibly with spin speed, temperature, and cycle-stage readings.
+\item \textbf{Marginalisation:} report fault type and severity while averaging over load size, sensor placement, machine age, and background noise.
+\item \textbf{Truncation:} after normal operation is ruled out, simulate more heavily in the remaining plausible fault scenarios.
+\end{itemize}
 \end{document}

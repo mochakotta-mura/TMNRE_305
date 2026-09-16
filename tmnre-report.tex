@@ -1,93 +1,116 @@
-\documentclass[11pt,a4paper]{article}
+﻿\documentclass[11pt,a4paper]{article}
 \usepackage[margin=1in]{geometry}
 \usepackage{amsmath,amssymb}
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage{hyperref}
-\usepackage{graphicx}
 \usepackage{bm}
-
-\title{Truncated Marginal Neural Ratio Estimation (TMNRE)\\\large A Simulation-Based Inference Approach}
+\title{Truncated Marginal Neural Ratio Estimation (TMNRE)\\large A Simulation-Based Inference Approach}
 \author{Murali Krishnan}
 \date{\today}
-
 \begin{document}
-
 \maketitle
 
 \begin{abstract}
-This report presents a structured overview of Truncated Marginal Neural Ratio Estimation (TMNRE), a neural simulation-based inference algorithm designed for efficient and credible Bayesian parameter estimation in settings with high-dimensional parameters and intractable likelihoods. The focus is on the core ideas, algorithmic details, and practical implementation aspects.
+This report presents Truncated Marginal Neural Ratio Estimation (TMNRE) as a method for Bayesian inference when a simulator is available but the likelihood cannot be evaluated. It focuses on neural ratio estimation, low-dimensional marginal posteriors, and iterative truncation of the prior. Applications to the cosmic microwave background, strong gravitational lensing, and the sky-averaged 21-cm signal illustrate the capabilities and assumptions of TMNRE.
 \end{abstract}
 
 \section{Introduction}
-
-Many physical models are most naturally specified as stochastic forward simulators: given parameters $\bm{\theta}$, one can generate synthetic data $\bm{x}$ by running a chain of physical processes, instrument responses, and noise realizations. Cosmological analyses of the cosmic microwave background, strong gravitational lensing images, type Ia supernova light curves, stochastic gravitational-wave background searches, and 21-cm cosmology all fall into this category~\citep{tmnreCosmology,tmnreStrongLensing,tmnreSupernovaeDust,tmnreGravitationalWaves,tmnre21cm}. In such problems the forward model is available, but the likelihood $p(\bm{x} \mid \bm{\theta})$---the probability of the observed data given parameters---is typically not, because writing it down would require integrating over an enormous number of latent variables introduced along the simulation chain~\citep{tmnreOriginal,tmnreGravitationalWaves}.
-
-Simulation-based inference (SBI) is the family of methods that performs Bayesian inference in exactly this regime, using only samples $(\bm{\theta}, \bm{x}) \sim p(\bm{\theta})p(\bm{x} \mid \bm{\theta})$ drawn from the prior and the simulator~\citep{tmnreOriginal,autoregressiveNre}. The practical difficulty is cost. Classical approaches such as Approximate Bayesian Computation, or likelihood-based Markov Chain Monte Carlo (MCMC) with hand-crafted approximate likelihoods, scale poorly when the simulator is expensive and when the posterior occupies a tiny fraction of the prior volume~\citep{tmnreOriginal,tmnreCosmology}.
-
-\subsection*{Two obstacles: dimensionality and trust}
-
-The first obstacle is dimensionality, and it is worth being precise about why it bites. Suppose the prior is a product of independent distributions over $d$ parameters, and that for each parameter the posterior is narrower than the prior by a factor $f < 1$. The posterior then occupies a fraction $\sim f^{d}$ of the prior volume. For a modest $f = 0.1$ and $d = 20$, this is $10^{-20}$: a naive rejection or importance-sampling scheme that draws from the prior would need astronomically many simulator calls before a single sample landed in the region of interest. This exponential shrinkage of the useful fraction of parameter space is the sense in which SBI suffers from the curse of dimensionality~\citep{tmnreOriginal,tmnreCosmology}. The same exponential scaling afflicts attempts to model the full joint posterior density $p(\bm{\theta} \mid \bm{x}_0)$: the number of samples needed to constrain a $d$-dimensional density grows rapidly with $d$, even though in practice a physicist usually wants only a handful of one- and two-dimensional marginals for the parameters of interest, with the remaining nuisance parameters integrated out~\citep{mnreOverview,tmnrePerturberPopulation}.
-
-The second obstacle is trust. Because the ground-truth posterior is inaccessible in a real analysis, one would like to test whether the reported credible intervals are actually calibrated---whether a nominal $68\%$ interval contains the true parameter $68\%$ of the time. Such tests require evaluating the inference procedure repeatedly on many mock observations, which is prohibitive for a sampling method that must be re-run from scratch for every dataset~\citep{tmnreOriginal,tmnreTalkCole}.
-
-\subsection*{How TMNRE works}
-
-Truncated Marginal Neural Ratio Estimation addresses both obstacles by combining three ingredients~\citep{tmnreOriginal,tmnreTalkWeniger}.
-
-\paragraph{Ratio estimation instead of density estimation.} Rather than modelling a likelihood or posterior density directly, TMNRE trains a neural network as a binary classifier that distinguishes pairs drawn jointly, $(\bm{\theta}, \bm{x}) \sim p(\bm{\theta}, \bm{x})$, from pairs drawn independently, $(\bm{\theta}, \bm{x}) \sim p(\bm{\theta})p(\bm{x})$. At the optimum, the classifier's output recovers the likelihood-to-evidence ratio
+Bayesian inference asks how an observation changes the plausibility of unknown parameters. With parameters $\bm{\theta}$ and observed data $\bm{x}_0$,
 \begin{equation}
-  r(\bm{x} \mid \bm{\theta})
-  = \frac{p(\bm{x} \mid \bm{\theta})}{p(\bm{x})}
-  = \frac{p(\bm{\theta} \mid \bm{x})}{p(\bm{\theta})},
-  \label{eq:ratio}
+p(\bm{\theta}|\bm{x}_0)=\frac{p(\bm{x}_0|\bm{\theta})p(\bm{\theta})}{p(\bm{x}_0)}.
 \end{equation}
-so a trained network converts prior samples into weighted posterior samples without any likelihood evaluation~\citep{tmnreOriginal,tmnreExperimentsCode}.
+The prior describes plausible parameters before the observation, the likelihood describes how compatible the observation is with them, and the posterior is the updated distribution.
 
-\paragraph{Marginal rather than joint targets.} TMNRE trains a separate ratio estimator for each low-dimensional marginal of interest, typically the one- and two-dimensional slices of $\bm{\theta}$ that will appear in the final corner plot. Nuisance parameters are marginalized implicitly: they are varied in the simulations but simply not conditioned on in Eq.~\eqref{eq:ratio}. This sidesteps the high-dimensional density-estimation problem described above and, in the CMB application, made the number of simulations required effectively independent of the number of nuisance parameters~\citep{tmnreCosmology,mnreOverview,tmnreStrongLensing}.
+The difficulty addressed by TMNRE is that many scientific models are specified by a stochastic simulator. The simulator may generate $\bm{x}$ for a given $\bm{\theta}$, while the probability density $p(\bm{x}|\bm{\theta})$ may remain unavailable because the simulator includes latent physical processes, instrument effects, and noise. The original TMNRE paper presents the method for this combination of intractable likelihoods and high-dimensional parameters \citep{tmnreOriginal}.
 
-\paragraph{Iterative truncation of the prior.} TMNRE proceeds in rounds. After each round of training, the learned marginals for the specific observation $\bm{x}_0$ are used to construct a constrained region $\Gamma \subset \Theta$ containing essentially all of the posterior mass, and the prior is multiplied by an indicator function on $\Gamma$~\citep{tmnreOriginal,swyftTruncationTutorial}. Concretely, for each parameter the algorithm discards the parameter values whose estimated marginal posterior density falls below a small threshold---the low-density regions far from the bulk of the posterior, which in a unimodal case are the outer wings of the marginal distribution. Inside $\Gamma$ the prior retains its original shape and normalization up to a constant; only the excluded outer regions change, and they are assigned zero mass. Simulations in the next round are drawn from this truncated prior, so simulator effort is concentrated where the posterior actually lives. The rounds terminate once successive truncated regions cease to shrink appreciably~\citep{tmnreOriginal,swyftTruncationTutorial}.
+\section{What simulation-based inference changes}
+Instead of evaluating a likelihood, training examples are generated:
+\begin{equation}
+\bm{\theta}^{(i)}\sim p(\bm{\theta}),\qquad
+\bm{x}^{(i)}\sim p(\bm{x}|\bm{\theta}^{(i)}).
+\end{equation}
+Each pair indicates what data can arise from a particular parameter choice. SBI learns from many such pairs.
 
-\subsection*{What this buys}
+A full posterior can still be difficult to learn. If the useful range is a fraction $f$ of the prior range in each of $d$ dimensions, the useful volume is approximately $f^d$. For $f=0.1$ and $d=20$, this is $10^{-20}$. This is why TMNRE does not try to represent every detail of a high-dimensional joint posterior when the scientific result may require only a few one- and two-dimensional distributions.
 
-The gains from truncation are substantial and have been quantified in several analyses. In the CMB power-spectrum study of Cole et al., TMNRE recovered accurate one- and two-dimensional marginal posteriors for the six $\Lambda$CDM parameters from roughly $3 \times 10^{3}$ simulations, whereas the reference MCMC required $\mathcal{O}(5 \times 10^{6})$ simulator calls for converged $1$- and $2\sigma$ contours---about three orders of magnitude more~\citep{tmnreCosmology,coleSbiLectures}. For the stochastic gravitational-wave background, TMNRE needed $98\%$ fewer waveform evaluations than the nested-sampling approach in standard use~\citep{tmnreGravitationalWaves}. Reported improvements elsewhere are more modest but still significant, with factors of a few to a few tens in 21-cm and large-scale-structure applications, so the headline ``orders of magnitude'' claim should be read as problem-dependent rather than universal~\citep{tmnre21cm,mnreOverview}.
+\section{Neural ratio estimation}
+TMNRE estimates the ratio
+\begin{equation}
+r(\bm{x}|\bm{\theta})=
+\frac{p(\bm{x}|\bm{\theta})}{p(\bm{x})}
+=\frac{p(\bm{\theta}|\bm{x})}{p(\bm{\theta})}.
+\end{equation}
+This ratio can be estimated with a classifier. Joint pairs are generated by drawing a parameter and simulating data from it:
+\[
+(\bm{\theta},\bm{x})\sim p(\bm{\theta})p(\bm{x}|\bm{\theta}).
+\]
+Independent pairs are made by combining independently drawn parameters and data:
+\[
+(\bm{\theta},\bm{x})\sim p(\bm{\theta})p(\bm{x}).
+\]
+The classifier learns whether the parameter and data are associated. If $s$ is the probability assigned to the joint class and the classes are balanced, then
+\begin{equation}
+\frac{s(\bm{x},\bm{\theta})}{1-s(\bm{x},\bm{\theta})}
+=\frac{p(\bm{x}|\bm{\theta})}{p(\bm{x})}.
+\end{equation}
+Thus classification supplies a likelihood-to-evidence ratio without requiring an explicit likelihood expression.
 
-Separately from this efficiency gain, TMNRE is \emph{locally amortized}: the trained networks are valid for any data resembling $\bm{x}_0$, rather than only for $\bm{x}_0$ itself, though not for arbitrary datasets across the whole prior. Because evaluating a trained estimator is cheap, one can run it on many mock observations generated within the truncated region and thereby perform the coverage and consistency tests that motivated the second obstacle above---diagnostics that are impractical for a single MCMC chain~\citep{tmnreOriginal,tmnreTalkCole,autoregressiveNre}.
+\section{Marginal neural ratio estimation}
+The final result does not usually require every model parameter. Writing $\bm{\theta}=(\bm{\phi},\bm{\psi})$, where $\bm{\phi}$ are parameters of interest and $\bm{\psi}$ are nuisance parameters, the desired marginal is
+\begin{equation}
+p(\bm{\phi}|\bm{x}_0)=\int p(\bm{\phi},\bm{\psi}|\bm{x}_0),d\bm{\psi}.
+\end{equation}
+The nuisance parameters are not deleted from the model. They remain in the simulations and therefore affect the distribution of the simulated data. They are simply integrated out of the reported result. TMNRE estimates selected one- and two-dimensional marginals rather than a single very high-dimensional density.
 
-\subsection*{Structure of this report}
+This is a useful distinction: marginalisation is based on the scientific question, whereas truncation is based on the posterior support for the particular observation.
 
-Section~\ref{sec:background} reviews the SBI setting more carefully. Section~\ref{sec:nre} develops neural and marginal ratio estimation. Section~\ref{sec:core} states the core TMNRE construction, and Section~\ref{sec:algorithm} gives the algorithm in full, including truncation criteria and stopping rules. Section~\ref{sec:implementation} covers implementation with \texttt{swyft}, the reference implementation of TMNRE~\citep{swyftSoftware,tmnreExperimentsCode}. Section~\ref{sec:examples} works through illustrative examples, Section~\ref{sec:diagnostics} discusses diagnostics and calibration, Section~\ref{sec:comparison} compares TMNRE with alternative SBI algorithms, and Section~\ref{sec:limitations} collects limitations and open directions.
+\section{Truncating the prior}
+TMNRE proceeds in rounds. First, simulations are drawn from the original prior and used to train marginal ratio estimators. The estimators are evaluated on the observation to identify regions with appreciable posterior mass. A retained region $\Gamma$ is then defined using
+\begin{equation}
+p_{\Gamma}(\bm{\theta})=
+\frac{p(\bm{\theta})\mathbb{I}_{\Gamma}(\bm{\theta})}
+{\int_{\Gamma}p(\bm{\theta})d\bm{\theta}}.
+\end{equation}
+Within $\Gamma$, the relative prior probabilities are preserved; outside it, subsequent simulations assign zero mass. New simulations are therefore concentrated in a region more relevant to the observed data.
 
-\section{Background: Simulation-Based Inference}
-\label{sec:background}
+The truncation must be conservative. If an early estimate removes a genuine posterior mode, later rounds cannot recover it. Truncation should therefore be interpreted as an efficiency device rather than as a means of forcing the answer into a preferred range. The process stops when successive retained regions change very little.
 
-\section{Neural and Marginal Ratio Estimation}
-\label{sec:nre}
+\section{Application 1: the CMB}
+Cole et al. apply TMNRE to measurements of the cosmic microwave background (CMB) \citep{tmnreCosmology}. The CMB contains information about cosmological parameters, but the analysis can also include many nuisance parameters. The paper reports converged one- and two-dimensional posteriors with orders of magnitude fewer simulator calls than conventional MCMC in its test problem. It also finds that the required simulation count is effectively independent of the number of nuisance parameters, because the method targets marginals rather than the full joint posterior.
 
-\section{Core Ideas of TMNRE}
-\label{sec:core}
+Local amortisation is particularly important. The trained estimator can be evaluated on many nearby mock observations. This makes coverage and consistency tests practical. Since the true posterior is unknown, a credible interval cannot simply be trusted because it looks smooth. Testing whether nominal 68 percent regions contain the true value about 68 percent of the time is part of making the result credible. The application uses the open-source swyft implementation.
 
-\section{TMNRE Algorithm}
-\label{sec:algorithm}
+\section{Application 2: strong gravitational lensing}
+A strong-lensing image contains a bright background source distorted by a foreground galaxy. Smaller dark-matter halos, including halos along the line of sight, perturb the image subtly. An individual perturbing halo may be hard to detect, while the population can still contain information about the warm-dark-matter mass function.
 
-\section{Implementation with \texttt{swyft}}
-\label{sec:implementation}
+Anau Montel et al. combine parametric lens models with TMNRE and simulated sets of Hubble-resolution images to constrain the warm-dark-matter cutoff scale \citep{tmnreStrongLensing}. Their method marginalises over a large population of realistic perturbers as well as uncertainty in lens and source parameters. This matters because ignoring these objects or compressing the image into a hand-designed summary statistic can lose information or understate uncertainty.
 
-\section{Illustrative Examples}
-\label{sec:examples}
+Coogan et al. study the related problem of individual subhalo measurements \citep{tmnrePerturberPopulation}. Their mock-data analyses show that TMNRE can infer subhalo parameters while marginalising over hundreds of subhalos and line-of-sight halos. This provides a concrete example of why marginalisation is not merely a mathematical convenience: the nuisance population is physically real, and omitting it would make the model less realistic.
 
-\section{Diagnostics and Reliability}
-\label{sec:diagnostics}
+\section{Application 3: the sky-averaged 21-cm signal}
+The sky-averaged 21-cm signal from the Cosmic Dawn and Epoch of Reionization can reveal information about early galaxies and cosmology. In practice, an analysis must account for foreground emission, beam uncertainties, ionospheric effects, and receiver noise. These effects make a simple likelihood model unreliable or computationally expensive.
 
-\section{Relations to Other SBI Methods}
-\label{sec:comparison}
+Saxena et al. apply TMNRE to mock observations for the REACH experiment \citep{tmnre21cm}. Their simulations include beam-weighted foregrounds, a physically motivated 21-cm signal, and radiometric noise. They estimate posteriors for model parameters and find that combining multiple time slices and antennas improves constraints and exploration of the cosmological signal.
 
-\section{Limitations and Future Work}
-\label{sec:limitations}
+This example clarifies marginalisation. The target parameters might describe the astrophysical 21-cm signal, while foreground and instrument parameters are still simulated but treated as nuisance quantities. Truncation then directs later simulations towards combinations of signal and nuisance settings that can plausibly reproduce the observed spectrum. These nuisance settings must remain in the simulator; otherwise the final uncertainty would be unrealistically narrow.
+
+\section{What TMNRE achieves}
+Across these applications, three linked advantages emerge. First, the ratio formulation avoids direct likelihood evaluation. Second, marginal targets avoid requiring a detailed model of every parameter dependence. Third, truncation prevents later simulation rounds from spending most of their effort in regions already shown to be incompatible with the observation.
+
+The CMB example demonstrates efficiency and local amortisation. Strong lensing demonstrates the ability to retain complicated populations of nuisance objects. The 21-cm example demonstrates that foreground and instrument effects can be included in a physically motivated simulator without requiring a simple analytic likelihood.
+
+\section{Limitations and questions}
+TMNRE does not remove the need for modelling choices. The prior determines where the initial simulations are drawn from, and the simulator determines which forms of uncertainty can appear in the training data. A misspecified simulator can produce a precise but misleading posterior.
+
+Truncation introduces an irreversible risk: an early mistake can discard a later-important region. Neural classifiers can also be imperfect, particularly in narrow or multimodal problems. Consequently, posterior plots constitute incomplete evidence without coverage tests, simulation-based calibration, posterior-predictive checks, and comparisons with a trusted method where one is available.
+
+The method also produces selected marginals rather than automatically giving every dependence in the full parameter space. This is a strength when the scientific question is focused, but a limitation if later questions require a marginal that was never trained.
 
 \section{Conclusion}
-\label{sec:conclusion}
+TMNRE provides a practical compromise between physical realism and computational cost. The method accommodates detailed stochastic simulators, learns parameter--data associations through classification, focuses on low-dimensional marginals relevant to the scientific question, and iteratively concentrates simulations around the observed data.
+
+The five applications show that this is not limited to one type of dataset: it has been used for CMB measurements, strong-lensing images, and 21-cm radio observations. Its credibility depends on realistic simulations, conservative truncation, explicit treatment of nuisance parameters, and empirical tests of calibration.
 
 \bibliographystyle{unsrtnat}
 \bibliography{references}
-
 \end{document}
