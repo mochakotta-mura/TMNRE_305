@@ -1,276 +1,230 @@
 ﻿\documentclass[13pt,a4paper]{article}
-
-\usepackage[
-  top=0.6in,
-  bottom=0.6in,
-  left=0.6in,
-  right=0.6in
-]{geometry}
+\usepackage[top=0.6in,bottom=0.6in,left=0.6in,right=0.6in]{geometry}
 \usepackage{amsmath,amssymb}
 \usepackage{bm}
 \usepackage{fancyhdr}
 \usepackage{enumitem}
-
 \pagestyle{fancy}
 \fancyhf{}
+\fancyhead[L]{TMNRE - Speaker Notes}
+\fancyhead[R]{Simulation-Based Inference}
 \cfoot{\thepage}
-\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\headrulewidth}{0.4pt}
 \renewcommand{\footrulewidth}{0pt}
-
+\setlist[itemize]{leftmargin=1.8em,itemsep=0.25em,topsep=0.25em}
 \begin{document}
+\begin{center}
+{\large\bfseries Truncated Marginal Neural Ratio Estimation}
+\par
+{\normalsize A simulation-based inference approach}
+\end{center}
 
-\begin{center}{\large\bfseries TMNRE}\end{center}
+\section*{The problem: learning from a simulator}
 
-\section*{Presentation route}
+Bayesian inference asks which explanations remain plausible after data have been observed. If a model has parameters $\bm{\theta}$ and the observation is $\bm{x}_0$, Bayes' theorem is
+\begin{equation}
+p(\bm{\theta}\mid\bm{x}_0)=
+\frac{p(\bm{x}_0\mid\bm{\theta})p(\bm{\theta})}{p(\bm{x}_0)}.
+\end{equation}
+The prior describes plausible parameters before the observation. The likelihood describes how compatible the observation is with a proposed parameter value. The posterior is the updated distribution.
+
+In many physical problems the forward model is available as a simulator. A parameter value can be passed through physical processes, measurement effects, and noise:
+\[
+\bm{\theta}\longrightarrow\text{simulator}\longrightarrow\bm{x}.
+\]
+The difficulty is that the probability density of a particular output may not be available in a tractable form. Latent variables and complicated stochastic steps would have to be integrated out in order to evaluate the likelihood, drastically increasing the number of requisite calculations and quantity of required data.
+
 \begin{itemize}
-\item Start with the Bayesian question: which parameter values remain plausible after observing data?
-\item Explain the simulator, then contrast likelihood-based MCMC with simulation-based inference.
-\item Explain the ratio classifier: joint parameter--data pairs versus independently shuffled pairs.
-\item Introduce marginalisation: retain parameters needed for the scientific question and average over nuisance parameters.
-\item Introduce truncation: use estimated marginals to remove only low-posterior regions and simulate again.
-\item End with validation: check that plausible modes were not removed and test coverage on new simulations.
+\item A simulator answers: "What data could this model produce?"
+\item A likelihood answers: "How probable is this dataset under the model?"
+\item TMNRE is designed for situations in which the first question is feasible but the second is not due to simulator complexity (like branching decisions, many hidden variables, etc.).
 \end{itemize}
 
+\paragraph{Speaker notes}
 
-Bayesian inference concerns learning about unknown quantities from observed data. Bayes' theorem expresses how information from the data updates an initial probability distribution:
+The distinction is between generating data and assigning an exact probability to data. A model may produce realistic mock observations while remaining unsuitable for ordinary likelihood-based MCMC.
+
+\section*{Simulation-based inference}
+
+Simulation-based inference, or SBI, replaces explicit likelihood evaluations with simulated examples:
 \begin{equation}
-p(H \mid D)
-=
-\frac{p(D \mid H)p(H)}{p(D)}.
-\end{equation}
-
-Here, $H$ denotes a hypothesis and $D$ denotes observed data. The quantity $p(H)$ is the prior probability of the hypothesis before observing the data. The likelihood $p(D \mid H)$ is the probability of observing the data if the hypothesis is true. The evidence $p(D)$ is the overall probability of the data under all possible hypotheses. It normalises the posterior so that
-\[
-\int p(H \mid D)\,dH = 1.
-\]
-
-The posterior $p(H \mid D)$ is the updated probability distribution after the data have been observed. It combines the prior information with the compatibility of each hypothesis with the data. More generally, if a model is described by a vector of unknown parameters
-\[
-\bm{\theta}
-=
-(\theta_1,\theta_2,\ldots,\theta_d)
-\]
-and the observed data are denoted by $\bm{x}_0$, Bayes' theorem becomes
-\begin{equation}
-p(\bm{\theta}\mid\bm{x}_0)
-=
-\frac{
-p(\bm{x}_0\mid\bm{\theta})p(\bm{\theta})
-}{
-p(\bm{x}_0)
-}.
-\end{equation}
-
-The posterior $p(\bm{\theta}\mid\bm{x}_0)$ describes which parameter values remain plausible after observing $\bm{x}_0$. The prior $p(\bm{\theta})$ describes the parameter distribution before the observation. The likelihood
-\[
-p(\bm{x}_0\mid\bm{\theta})
-\]
-measures how compatible the observed data are with a proposed parameter value. The evidence
-\[
-p(\bm{x}_0)
-=
-\int p(\bm{x}_0\mid\bm{\theta})p(\bm{\theta})\,d\bm{\theta}
-\]
-is obtained by averaging the likelihood over the prior. It is the normalising constant for the posterior and can also be interpreted as the probability of obtaining the observed data under the model.
-
-A useful quantity is the likelihood-to-evidence ratio
-\begin{equation}
-r(\bm{x}_0\mid\bm{\theta})
-=
-\frac{p(\bm{x}_0\mid\bm{\theta})}{p(\bm{x}_0)}.
-\end{equation}
-By Bayes' theorem, this is also the posterior-to-prior ratio:
-\begin{equation}
-r(\bm{x}_0\mid\bm{\theta})
-=
-\frac{p(\bm{\theta}\mid\bm{x}_0)}{p(\bm{\theta})}.
-\end{equation}
-
-The ratio therefore describes how observing $\bm{x}_0$ changes the plausibility of $\bm{\theta}$. If the ratio is greater than one, the observation increases the relative plausibility of that parameter value. If it is less than one, the observation decreases its relative plausibility. Knowing the ratio and the prior is sufficient to reconstruct the posterior:
-\begin{equation}
-p(\bm{\theta}\mid\bm{x}_0)
-=
-r(\bm{x}_0\mid\bm{\theta})p(\bm{\theta}).
-\end{equation}
-
-In many physical applications, the parameters describe a forward model. Given a parameter value $\bm{\theta}$, the model produces data according to a simulator:
-\[
-\bm{x}\sim p(\bm{x}\mid\bm{\theta}).
-\]
-The simulator may represent physical evolution, measurement effects, detector noise, selection effects, or other stochastic processes. It may be straightforward to generate a synthetic dataset, while being difficult or impossible to evaluate the probability density of a particular dataset analytically.
-
-This situation is described as an intractable likelihood. Standard Bayesian methods require the likelihood, either explicitly or through repeated evaluations of it. When the likelihood cannot be evaluated, ordinary posterior-sampling methods cannot be applied directly.
-
-Simulation-based inference (SBI), also called likelihood-free inference, addresses this setting by using simulations instead of explicit likelihood evaluations. Samples are generated by first drawing parameters from the prior and then simulating data:
-\begin{equation}
-\bm{\theta}^{(i)}\sim p(\bm{\theta}),
-\qquad
+\bm{\theta}^{(i)}\sim p(\bm{\theta}),\qquad
 \bm{x}^{(i)}\sim p(\bm{x}\mid\bm{\theta}^{(i)}).
 \end{equation}
-The resulting parameter--data pairs,
+
+where $\theta^{(i)}$ is the i-th simulation.
+
+Each pair records what the simulator produced for a known parameter choice. Traditional MCMC attempts to repeatedly generate parameter values that fit the dataset at random. SBI instead learns from a collection of simulated parameter--data pairs.
+
+There is still a dimensionality problem. If the informative range is a fraction $f$ of the prior range in each of $d$ directions, the useful volume is approximately $f^d$. For $f=0.1$ and $d=20$,
 \[
-\left\{
-\left(\bm{\theta}^{(i)},\bm{x}^{(i)}\right)
-\right\}_{i=1}^{N},
+(0.1)^{20}=10^{-20}.
 \]
-are used to learn information about the posterior or a ratio related to it.
+Random draws via MCMC from the full prior will therefore rarely reach the region that contributes most to the posterior.
 
-Markov Chain Monte Carlo (MCMC) is a traditional method for sampling from a posterior distribution. It produces a sequence
-\[
-\bm{\theta}^{(1)},\bm{\theta}^{(2)},\ldots
-\]
-in which the next parameter value depends on the current value. At each step, a proposal is generated and accepted or rejected according to a rule designed so that the stationary distribution of the chain is the target posterior.
+\paragraph{Speaker notes}
 
-If the likelihood can be evaluated, MCMC can explore the posterior without requiring the posterior normalisation constant. However, each proposed state may require a likelihood evaluation. If likelihood evaluation is expensive or impossible, MCMC becomes impractical. Even when it is usable, MCMC may spend many evaluations in regions of parameter space that have negligible posterior probability.
+The difficulty is not simply that there are many parameters. The useful region becomes a very small part of the space in which simulations are initially drawn.
 
-SBI and MCMC therefore address the same broad task—Bayesian parameter inference—but use different computational strategies. MCMC generates a chain for one observed dataset by repeatedly evaluating a likelihood or an approximation to it. SBI learns an inference function from simulated parameter--data pairs. Once trained, that function can be evaluated rapidly for the observation of interest.
+\section*{The likelihood-to-evidence ratio}
 
-SBI introduces its own difficulties. First, the parameter space may be high-dimensional. If there are $d$ parameters and the posterior occupies a fraction $f$ of the prior range in each direction, then the posterior occupies approximately
-\[
-f^d
-\]
-of the prior volume. For example, if the relevant range is one tenth of the prior range in each of $20$ dimensions, the relevant volume is approximately
-\[
-(0.1)^{20}=10^{-20}
-\]
-of the original volume. Random simulations from the full prior will then rarely fall in the region that contributes substantially to the posterior.
-
-This is one manifestation of the curse of dimensionality. As the number of dimensions increases, the volume of parameter space grows rapidly, while the available simulations become increasingly sparse. A method attempting to learn the full joint posterior must represent dependence across all parameter dimensions, including parameters that may not be of direct scientific interest.
-
-Second, many physical models contain nuisance parameters. These parameters affect the simulated data and must be accounted for, but they may not be included in the final result. The desired output is often a one- or two-dimensional marginal posterior rather than the complete joint posterior.
-
-Third, simulations may be expensive. A method that wastes most of its simulations in regions incompatible with the observation is inefficient. Finally, the true posterior is usually unavailable, making calibration and validation important. Credible intervals should be tested to determine whether they contain the true parameter values at their stated frequencies.
-
-Neural Ratio Estimation (NRE) approaches SBI by estimating a probability ratio with a classifier rather than directly estimating a probability density. The target ratio may be written as
+TMNRE estimates
 \begin{equation}
-r(\bm{x}\mid\bm{\theta})
+r(\bm{x}\mid\bm{\theta})=
+\frac{p(\bm{x}\mid\bm{\theta})}{p(\bm{x})}
+=\frac{p(\bm{\theta}\mid\bm{x})}{p(\bm{\theta})}.
+\end{equation}
+A ratio greater than one favours a parameter value relative to the prior; a ratio less than one disfavors it.
+
+The ratio can be learned as a classification problem. A joint pair is generated by drawing a parameter and simulating data from that same parameter:
+\[
+(\bm{\theta},\bm{x})\sim p(\bm{\theta})p(\bm{x}\mid\bm{\theta}).
+\]
+An independent pair combines independently drawn parameters and data:
+\[
+(\bm{\theta},\bm{x})\sim p(\bm{\theta})p(\bm{x}).
+\]
+The classifier predicts whether the two elements are associated. If $s(\bm{x},\bm{\theta})$ is the probability assigned to the joint class, balanced classes give
+\begin{equation}
+\frac{s(\bm{x},\bm{\theta})}{1-s(\bm{x},\bm{\theta})}
+=
+\frac{p(\bm{\theta},\bm{x})}{p(\bm{\theta})p(\bm{x})}
 =
 \frac{p(\bm{x}\mid\bm{\theta})}{p(\bm{x})}.
 \end{equation}
-
-The training data consist of two classes of parameter--data pairs. A joint pair is generated by drawing $\bm{\theta}$ from the prior and then generating $\bm{x}$ using that same parameter:
-\begin{equation}
-(\bm{\theta},\bm{x})
-\sim
-p(\bm{\theta},\bm{x})
-=
-p(\bm{\theta})p(\bm{x}\mid\bm{\theta}).
-\end{equation}
-
-An independent pair is generated by drawing the parameter and data independently:
-\begin{equation}
-(\bm{\theta},\bm{x})
-\sim
-p(\bm{\theta})p(\bm{x}).
-\end{equation}
-
-The classifier is trained to distinguish joint pairs from independent pairs. Joint pairs form one class, and independent pairs form the other. The classifier must learn whether the parameter and data are statistically associated or whether they are unrelated.
-
-Let $s(\bm{x},\bm{\theta})$ denote the classifier output, interpreted as the probability that a pair belongs to the joint class. For balanced classes, the optimal classifier satisfies
-\begin{equation}
-s(\bm{x},\bm{\theta})
-=
-\frac{
-p(\bm{\theta},\bm{x})
-}{
-p(\bm{\theta},\bm{x})
-+
-p(\bm{\theta})p(\bm{x})
-}.
-\end{equation}
-The density ratio is then obtained from the classifier odds:
-\begin{equation}
-\frac{s(\bm{x},\bm{\theta})}
-{1-s(\bm{x},\bm{\theta})}
-=
-\frac{
-p(\bm{\theta},\bm{x})
-}{
-p(\bm{\theta})p(\bm{x})
-}
-=
-\frac{p(\bm{x}\mid\bm{\theta})}{p(\bm{x})}.
-\end{equation}
-
-NRE therefore transforms likelihood-free inference into a binary classification problem. A trained classifier estimates how strongly a particular parameter value and dataset are associated.
-
-Marginalisation is required when only a subset of parameters is of interest. Let
+The posterior can then be reconstructed, up to its normalisation, from
 \[
-\bm{\theta}
-=
-(\bm{\phi},\bm{\psi}),
+p(\bm{\theta}\mid\bm{x}_0)
+=r(\bm{x}_0\mid\bm{\theta})p(\bm{\theta}).
 \]
-where $\bm{\phi}$ denotes parameters of interest and $\bm{\psi}$ denotes nuisance parameters. The marginal posterior for $\bm{\phi}$ is
+
+\paragraph{Speaker notes}
+
+The classifier is not being asked to name a physical object. It is being asked whether a parameter value and a dataset belong together. A difficult density-ratio problem is thereby turned into a supervised-learning problem.
+
+\section*{Marginalisation: report the parameters of interest}
+
+A scientific model often contains parameters that affect the data but are not part of the final result. Write
+\[
+\bm{\theta}=(\bm{\phi},\bm{\psi}),
+\]
+where $\bm{\phi}$ denotes parameters of interest and $\bm{\psi}$ denotes nuisance parameters. The required marginal posterior is
 \begin{equation}
-p(\bm{\phi}\mid\bm{x}_0)
-=
-\int
-p(\bm{\phi},\bm{\psi}\mid\bm{x}_0)
-\,d\bm{\psi}.
+p(\bm{\phi}\mid\bm{x}_0)=
+\int p(\bm{\phi},\bm{\psi}\mid\bm{x}_0)\,d\bm{\psi}.
 \end{equation}
+Nuisance parameters remain present when simulations are generated. Their uncertainty is carried into the simulated data and therefore into the inferred distribution for $\bm{\phi}$.
 
-Marginalisation does not remove nuisance parameters from the model. Their uncertainty remains present through the integration over $\bm{\psi}$. It removes them only from the reported distribution.
+TMNRE estimates selected one- and two-dimensional marginals rather than a single high-dimensional density.
+\begin{itemize}
+\item Parameters retained in a marginal are selected by the scientific question.
+\item Nuisance parameters remain in the simulator.
+\item The reported uncertainty includes their effect.
+\end{itemize}
 
-Marginal Neural Ratio Estimation (MNRE) trains ratio estimators for selected low-dimensional parameter subsets rather than for the full vector. For example, an estimator can target
-\[
-r(\bm{x}\mid\phi_i)
-\]
-for a one-dimensional marginal, or
-\[
-r(\bm{x}\mid\phi_i,\phi_j)
-\]
-for a two-dimensional marginal. The nuisance parameters are still sampled when generating the simulations, but they are not included in the classifier input as target parameters. Their effects are therefore incorporated through the distribution of simulated data.
+\paragraph{Speaker notes}
 
-TMNRE extends MNRE by truncating the prior iteratively. The procedure begins with simulations drawn from the original prior. The resulting simulations are used to train marginal ratio estimators. These estimators are then evaluated for the observed data $\bm{x}_0$ to identify regions of parameter space with appreciable posterior probability.
+Marginalisation does not mean ignoring nuisance parameters. It means averaging over them. A cosmological parameter can therefore be reported while averaging over calibration, foreground, or source-model uncertainty.
 
-Let $\Gamma$ denote the retained region. The truncated prior is
+\section*{Truncation: concentrate the simulations}TMNRE adds an iterative restriction of the prior so that later simulations are concentrated in regions that can explain the observation. The first round is broad and uses the original prior.
+
+After this round, the marginal ratio estimators are evaluated using the observed dataset. They indicate which parameter values are supported by the observation and which are strongly disfavoured. The supported region is then retained for the next round.
+
+If $\Gamma$ is the retained region, the truncated prior is
 \begin{equation}
-p_{\Gamma}(\bm{\theta})
-=
-\frac{
-p(\bm{\theta})\mathbb{I}_{\Gamma}(\bm{\theta})
-}{
-\displaystyle
-\int_{\Gamma}p(\bm{\theta})\,d\bm{\theta}
-},
+p_{\Gamma}(\bm{\theta})=
+\frac{p(\bm{\theta})\mathbb{I}_{\Gamma}(\bm{\theta})}
+{\displaystyle \int_{\Gamma}p(\bm{\theta})\,d\bm{\theta}},
 \end{equation}
 where
 \[
-\mathbb{I}_{\Gamma}(\bm{\theta})
-=
+\mathbb{I}_{\Gamma}(\bm{\theta})=
 \begin{cases}
-1, & \bm{\theta}\in\Gamma,\\
-0, & \bm{\theta}\notin\Gamma.
+1,&\bm{\theta}\in\Gamma,\\
+0,&\bm{\theta}\notin\Gamma.
 \end{cases}
 \]
 
-The truncated prior preserves the relative prior probabilities within $\Gamma$ and assigns zero probability outside $\Gamma$. It does not alter the shape of the prior inside the retained region.
+Where the denominator is a scaling factor, like in Bayes'.
 
-For a single parameter with a unimodal posterior, the excluded values are typically the outer portions of the prior range where the estimated posterior density is very small. These regions are called the tails of the posterior distribution. In multiple dimensions, TMNRE commonly constructs a retained region using bounds obtained from several marginal posterior estimates.
+The indicator function acts like a gate. It leaves values inside $\Gamma$ available and blocks values outside it. The denominator renormalises the remaining prior so that it again integrates to one.
 
-The next round of simulations is drawn from the truncated prior rather than the original prior. Consequently, simulations are concentrated in parameter regions that are more compatible with the observed data. The ratio estimators are retrained using the new simulations, and the truncation can be repeated over several rounds.
+The truncation changes the range of the prior, but not its relative shape inside the retained region. For example, suppose a parameter originally has a uniform prior from 0 to 100, and the first round indicates that values from 35 to 65 contain essentially all of the relevant posterior mass. The next round samples only from 35 to 65. Values within that interval remain equally likely relative to one another; values outside it are no longer simulated.
 
-The truncation must be conservative. If a genuine posterior region or mode is excluded during an early round, later rounds cannot recover it because no further simulations are drawn there. Thresholds and truncation criteria must therefore be chosen so that regions with non-negligible posterior probability are retained.
+The same applies to a non-uniform prior. If the original prior favours some values over others, truncation preserves those relative preferences inside the retained region. It does not replace the original prior with a new flat prior.
 
-TMNRE combines marginal ratio estimation with this iterative restriction of the simulation domain. Marginalisation avoids directly representing an unnecessarily high-dimensional joint posterior, while truncation reduces the number of simulations spent in regions that are unlikely under the observation. The result is a simulation-based inference procedure focused on the marginal posterior quantities required for the analysis.
+In one dimension, the retained region may be described by lower and upper bounds around the bulk of a marginal posterior. In several dimensions, the bounds are obtained from selected one- and two-dimensional marginal estimates. A conservative threshold removes low-density tails without discarding a separate mode or a region that still contains meaningful probability.
 
-\section*{TMNRE in accessible examples}
-\subsection*{Finding a planet from a star's brightness}
+The next round repeats the sequence: draw parameters from the truncated prior, run the simulator, train the classifiers again, and update the retained region. The process stops when further rounds barely change the region.
+
+Truncation is a compromise between coverage and efficiency. Keeping the entire prior protects against missing a possible explanation but wastes simulations. Truncating too aggressively saves simulations but can permanently remove a genuine explanation. TMNRE uses the initial broad search and conservative updates to balance these risks.
+
+\paragraph{Speaker notes}
+
+A useful analogy is searching for a small object in a large room. The first search covers the whole room. Once the likely area has been identified, later searches spend more time there. The search area can be reduced, but it must remain large enough to include every location that is still reasonably plausible.
+
+A region is useful because it contains meaningful posterior probability, not simply because it contains the highest point of the curve. A broad region with moderate density may contain more total probability than a narrow peak. Truncation should therefore use estimated posterior mass and checks for alternative modes, rather than an arbitrary cutoff chosen only for convenience.\section*{The TMNRE sequence}
+
+\begin{enumerate}
+\item Specify the simulator, prior, observed data, and parameters of interest.
+\item Draw an initial simulation set from the original prior.
+\item Train neural classifiers for the selected marginal parameter sets.
+\item Evaluate the ratio estimators on the observation.
+\item Construct a conservative truncated region.
+\item Draw a new simulation set from the truncated prior.
+\item Retrain and repeat until the region changes very little.
+\item Produce the requested marginal posteriors.
+\item Test calibration and coverage using additional simulations.
+\end{enumerate}
+
+Marginalisation reduces the complexity of the inferential target. Truncation reduces the number of simulations spent in regions already shown to be implausible.
+
+\section*{Application: the cosmic microwave background}
+
+The CMB is used to constrain cosmological parameters, but analyses can also contain many nuisance parameters. Cole et al. apply TMNRE to CMB inference and compare it with conventional MCMC. Their results show that converged one- and two-dimensional posteriors can be obtained with orders of magnitude fewer simulator calls in the studied problem. The required number of simulations is effectively independent of the number of nuisance parameters because TMNRE targets marginals rather than the full joint posterior.
+
+The application also demonstrates local amortisation. A trained estimator can be evaluated for many nearby mock observations. This makes coverage and consistency tests practical: a nominal 68 percent credible region should contain the true parameter approximately 68 percent of the time over repeated simulated experiments.
+
+\section*{Application: strong gravitational lensing}
+
+A strong-lensing image contains a background source distorted by a foreground galaxy. Dark-matter subhalos in the lens and along the line of sight produce smaller perturbations. These perturbations may be difficult to identify individually, while their population can carry information about dark matter.
+
+Anau Montel et al. combine parametric lensing models with TMNRE to constrain the cutoff scale of the warm-dark-matter halo mass function from multiple simulated Hubble-resolution images. The method marginalises over realistic perturbers and over uncertainty in lens and source parameters.
+
+Coogan et al. examine individual subhalo measurements while including populations of hundreds of subhalos and line-of-sight halos. TMNRE returns marginal posteriors for selected subhalo parameters without requiring every perturber to appear in the final plot.
+
 \begin{itemize}
-\item \textbf{Dataset:} brightness measurements over time, with transit dips, stellar variation, and instrument noise.
-\item \textbf{Marginalisation:} report planet radius and orbital period while averaging over baseline brightness, timing offsets, stellar variability, and noise.
-\item \textbf{Truncation:} retain radii and periods whose simulated dips resemble the observed dips; remove values only when posterior mass is negligible.
+\item The data are images rather than simple numerical summaries.
+\item The nuisance population is physically part of the lensing model.
+\item Marginalisation retains its uncertainty without displaying every nuisance parameter.
 \end{itemize}
-\subsection*{Recognising a noisy voice command}
-\begin{itemize}
-\item \textbf{Dataset:} a waveform or spectrogram showing sound strength across time and frequency.
-\item \textbf{Marginalisation:} report the command while averaging over speaker pitch, speed, microphone position, and noise type.
-\item \textbf{Truncation:} focus new simulations on commands and conditions whose simulated spectrograms resemble the observation.
-\end{itemize}
-\subsection*{Diagnosing a washing-machine fault}
-\begin{itemize}
-\item \textbf{Dataset:} an audio or vibration recording, possibly with spin speed, temperature, and cycle-stage readings.
-\item \textbf{Marginalisation:} report fault type and severity while averaging over load size, sensor placement, machine age, and background noise.
-\item \textbf{Truncation:} after normal operation is ruled out, simulate more heavily in the remaining plausible fault scenarios.
-\end{itemize}
+
+\paragraph{Speaker notes}
+
+Strong lensing shows why realistic nuisance modelling matters. Ignoring small perturbers could produce narrow constraints, but those constraints would not describe the physical system being observed.
+
+\section*{Application: the sky-averaged 21-cm signal}
+
+The redshifted 21-cm signal from the Cosmic Dawn and Epoch of Reionization contains information about the first galaxies and the early universe. Its measurement is complicated by foreground emission, beam uncertainties, ionospheric distortions, and receiver noise.
+
+Saxena et al. apply TMNRE to mock observations for the REACH experiment. Their simulations include beam-weighted foregrounds, a physically motivated 21-cm signal, and radiometric noise. Combining multiple time slices and antennas improves the constraints and exploration of the cosmological signal.
+
+The target parameters can describe the astrophysical 21-cm signal, while foreground and instrument parameters are treated as nuisance quantities. They remain in the simulations. Once the first round identifies signal and instrument combinations compatible with the observation, later simulations can focus on that region.
+
+\section*{Reliability and limitations}
+
+TMNRE addresses computational inefficiency but does not remove the need for model validation. The simulator determines which uncertainties can appear in the training set, and the prior determines the initial parameter space. If either is unrealistic, a well-trained classifier can still produce a misleading posterior.
+
+The main risk of truncation is premature removal of a genuine posterior region. Conservative thresholds and checks for missed modes are therefore essential. Neural classifiers may also be imperfect in narrow or multimodal problems.
+
+The locally amortised estimator enables repeated tests that are expensive for a new MCMC analysis. Useful checks include coverage tests, simulation-based calibration, posterior-predictive checks, and comparison with a trusted likelihood-based method.
+
+\section*{Conclusion}
+
+TMNRE is a simulation-based inference method for models in which data can be generated more easily than their likelihood can be evaluated. Its three central ideas are neural ratio estimation, marginalisation over nuisance parameters, and iterative truncation of the prior.
+
+The CMB application demonstrates efficiency and local amortisation. Strong-lensing applications demonstrate marginalisation over complex populations of dark-matter perturbers. The 21-cm application demonstrates the inclusion of foreground and instrument effects in a physically motivated simulator.
+
+TMNRE is therefore not a replacement for careful modelling. It is a way to combine realistic simulators with efficient and testable inference when conventional likelihood-based methods become impractical.
+
 \end{document}
